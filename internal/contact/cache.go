@@ -1,8 +1,6 @@
 package contact
 
-import (
-	"sync"
-)
+import "sync"
 
 type Cache struct {
 	mu sync.RWMutex
@@ -18,13 +16,13 @@ func NewCache() *Cache {
 			map[string]Identity,
 		),
 	}
+
 }
 
 func (c *Cache) Get(
 	handle string,
 ) (
-	Identity,
-	bool,
+	Identity, bool,
 ) {
 
 	c.mu.RLock()
@@ -45,4 +43,17 @@ func (c *Cache) Set(
 	defer c.mu.Unlock()
 
 	c.data[id.Handle] = id
+
+}
+
+func (c *Cache) Clear() {
+
+	c.mu.Lock()
+
+	defer c.mu.Unlock()
+
+	c.data = make(
+		map[string]Identity,
+	)
+
 }

@@ -1,29 +1,35 @@
 package contact
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestResolverFallback(t *testing.T) {
 
 	r := NewResolver()
 
-	id := r.Resolve(
+	id, err := r.Resolve(
 		"test-user",
 	)
 
-	if id.Handle != "test-user" {
+	if err != nil {
 
-		t.Fatal(
-			"handle mismatch",
-		)
+		t.Fatal(err)
+
 	}
 
 	if id.Name != "test-user" {
 
 		t.Fatal(
-			"fallback name mismatch",
+			"unexpected fallback",
 		)
+
+	}
+
+	if id.Type != "unknown" {
+
+		t.Fatal(
+			"unexpected type",
+		)
+
 	}
 
 }

@@ -2,32 +2,19 @@ package applemsg
 
 import "time"
 
-type Direction string
+type Direction int
 
 const (
-	Incoming Direction = "incoming"
-	Outgoing Direction = "outgoing"
+	Incoming Direction = iota
+	Outgoing
 )
 
-type Identity struct {
+type Handle struct {
 	Handle string
-	Type   string
-}
 
-type Message struct {
-	ID int64
-
-	GUID string
-
-	Sender Identity
+	Type string
 
 	Service string
-
-	Text string
-
-	Direction Direction
-
-	Time time.Time
 }
 
 type RawMessage struct {
@@ -48,4 +35,16 @@ type RawMessage struct {
 	IsFromMe bool
 
 	Date int64
+}
+
+type Message struct {
+	ID int64
+
+	Text string
+
+	Sender Handle
+
+	Time time.Time
+
+	Direction Direction
 }

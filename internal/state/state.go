@@ -35,7 +35,6 @@ func NewStore() (*Store, error) {
 		return nil, err
 	}
 
-
 	return &Store{
 		path: filepath.Join(
 			dir,
@@ -43,7 +42,6 @@ func NewStore() (*Store, error) {
 		),
 	}, nil
 }
-
 
 func (s *Store) Load() (*State, error) {
 
@@ -61,7 +59,6 @@ func (s *Store) Load() (*State, error) {
 		return nil, err
 	}
 
-
 	var state State
 
 	err = json.Unmarshal(
@@ -73,10 +70,8 @@ func (s *Store) Load() (*State, error) {
 		return nil, err
 	}
 
-
 	return &state, nil
 }
-
 
 func (s *Store) Save(state *State) error {
 
@@ -89,7 +84,6 @@ func (s *Store) Save(state *State) error {
 	if err != nil {
 		return err
 	}
-
 
 	return os.WriteFile(
 		s.path,

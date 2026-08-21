@@ -2,61 +2,25 @@ package applemsg
 
 import (
 	"database/sql"
-	"fmt"
-	"os"
-	"path/filepath"
-
-	_ "modernc.org/sqlite"
 )
 
 type Reader struct {
-	db *sql.DB
+	db *DB
 }
 
-func NewReader() (*Reader, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-
-	dbPath := filepath.Join(
-		home,
-		"Library",
-		"Messages",
-		"chat.db",
-	)
-
-	db, err := sql.Open(
-		"sqlite",
-		"file:"+dbPath+"?mode=ro",
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, err
-	}
+func NewReader(db *DB) *Reader {
 
 	return &Reader{
 		db: db,
-	}, nil
+	}
 }
 
-func (r *Reader) Close() error {
-	return r.db.Close()
-}
-
-
-// 返回当前数据库最大的 ROWID
 func (r *Reader) LastID() (int64, error) {
 
 	var id sql.NullInt64
 
-	err := r.db.QueryRow(`
-		SELECT MAX(ROWID)
+	err := r.db.conn.QueryRow(`
+		SELECT COALESCE(MAX(ROWID),0)
 		FROM message
 	`).Scan(&id)
 
@@ -64,90 +28,109 @@ func (r *Reader) LastID() (int64, error) {
 		return 0, err
 	}
 
-	if !id.Valid {
-		return 0, nil
-	}
-
 	return id.Int64, nil
 }
 
+func (r *Reader) ReadAfter(
+	lastID int64,
+) ([]RawMessage, error) {
 
-// 读取 ROWID 之后的新消息
-func (r *Reader) ReadAfter(lastID int64) ([]Message, error) {
-
-	rows, err := r.db.Query(`
+	rows, err := r.db.conn.Query(`
 		SELECT
 			m.ROWID,
-			m.is_from_me,
+			m.guid,
+			COALESCE(m.text,''),
+			m.attributedBody,
 			COALESCE(h.id,''),
 			COALESCE(h.service,''),
-			COALESCE(m.text,'')
+			m.is_from_me,
+			m.date
+
 		FROM message m
 
 		LEFT JOIN handle h
-			ON m.handle_id = h.ROWID
+			ON m.handle_id=h.ROWID
 
 		WHERE m.ROWID > ?
 
 		ORDER BY m.ROWID ASC
+
+		LIMIT 100
 	`,
 		lastID,
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf(
-			"query messages: %w",
-			err,
-		)
+		return nil, err
 	}
 
 	defer rows.Close()
 
-
-	var messages []Message
-
+	var result []RawMessage
 
 	for rows.Next() {
 
 		var (
-			id       int64
-			fromMe   int
-			handle   string
-			service  string
-			text     string
+			id      int64
+			guid    string
+			text    string
+			attr    []byte
+			handle  string
+			service string
+			fromMe  int
+			date    int64
 		)
-
 
 		err := rows.Scan(
 			&id,
-			&fromMe,
+			&guid,
+			&text,
+			&attr,
 			&handle,
 			&service,
-			&text,
+			&fromMe,
+			&date,
 		)
 
 		if err != nil {
 			return nil, err
 		}
 
+		result = append(
+			result,
+			RawMessage{
 
-		messages = append(
-			messages,
-			Message{
-				ID:      id,
-				Handle:  handle,
+				ID: id,
+
+				GUID: guid,
+
+				Text: text,
+
+				AttributedBody: attr,
+
+				Handle: handle,
+
 				Service: service,
-				Text:    text,
-				FromMe:  fromMe == 1,
+
+				HandleType: detectHandleType(handle),
+
+				IsFromMe: fromMe == 1,
+
+				Date: date,
 			},
 		)
 	}
 
+	return result, rows.Err()
+}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+func detectHandleType(
+	handle string,
+) string {
+
+	if len(handle) > 0 && handle[0] == '+' {
+		return "phone"
 	}
 
-
-	return messages, nil
+	return "email"
 }

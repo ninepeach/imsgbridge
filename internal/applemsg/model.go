@@ -19,8 +19,6 @@ type Message struct {
 
 	GUID string
 
-	ConversationID string
-
 	Sender Identity
 
 	Service string

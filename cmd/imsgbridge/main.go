@@ -1,11 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/ninepeach/imsgbridge/internal/applemsg"
+	"github.com/ninepeach/imsgbridge/internal/state"
 )
 
 func main() {
@@ -20,7 +21,11 @@ func main() {
 
 	reader := applemsg.NewReader(db)
 
-	lastID, err := reader.LastID()
+	service := applemsg.NewService(
+		reader,
+	)
+
+	store, err := state.NewStore()
 
 	if err != nil {
 		log.Fatal(err)
@@ -30,42 +35,29 @@ func main() {
 		"iMsgBridge watching...",
 	)
 
-	fmt.Println(
-		"Start ROWID:",
-		lastID,
-	)
+	ctx := context.Background()
 
-	ticker := time.NewTicker(
-		time.Second,
-	)
+	err = service.Run(
+		ctx,
+		store,
 
-	defer ticker.Stop()
-
-	for range ticker.C {
-
-		raws, err := reader.ReadAfter(lastID)
-
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		for _, raw := range raws {
-
-			msg := applemsg.Parse(raw)
+		func(msg applemsg.Message) {
 
 			fmt.Printf(
-				"%d [%s] %s %s %q\n",
+				"%d [%s] %s %q\n",
 				msg.ID,
 				msg.Direction,
-				msg.Service,
 				msg.Sender.Handle,
 				msg.Text,
 			)
 
-			if msg.ID > lastID {
-				lastID = msg.ID
-			}
-		}
+		},
+	)
+
+	if err != nil {
+
+		log.Fatal(err)
+
 	}
+
 }

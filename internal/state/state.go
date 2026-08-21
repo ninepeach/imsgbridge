@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 type State struct {
@@ -12,11 +13,14 @@ type State struct {
 
 type Store struct {
 	path string
+
+	mu sync.Mutex
 }
 
 func NewStore() (*Store, error) {
 
 	home, err := os.UserHomeDir()
+
 	if err != nil {
 		return nil, err
 	}
@@ -36,6 +40,7 @@ func NewStore() (*Store, error) {
 	}
 
 	return &Store{
+
 		path: filepath.Join(
 			dir,
 			"state.json",
@@ -43,20 +48,24 @@ func NewStore() (*Store, error) {
 	}, nil
 }
 
-func (s *Store) Load() (*State, error) {
+func (s *Store) Load() (int64, error) {
+
+	s.mu.Lock()
+
+	defer s.mu.Unlock()
 
 	data, err := os.ReadFile(
 		s.path,
 	)
 
 	if os.IsNotExist(err) {
-		return &State{
-			LastMessageID: 0,
-		}, nil
+
+		return 0, nil
 	}
 
 	if err != nil {
-		return nil, err
+
+		return 0, err
 	}
 
 	var state State
@@ -67,13 +76,25 @@ func (s *Store) Load() (*State, error) {
 	)
 
 	if err != nil {
-		return nil, err
+
+		return 0, err
 	}
 
-	return &state, nil
+	return state.LastMessageID, nil
 }
 
-func (s *Store) Save(state *State) error {
+func (s *Store) Save(
+	id int64,
+) error {
+
+	s.mu.Lock()
+
+	defer s.mu.Unlock()
+
+	state := State{
+
+		LastMessageID: id,
+	}
 
 	data, err := json.MarshalIndent(
 		state,
@@ -82,12 +103,25 @@ func (s *Store) Save(state *State) error {
 	)
 
 	if err != nil {
+
 		return err
 	}
 
-	return os.WriteFile(
-		s.path,
+	tmp := s.path + ".tmp"
+
+	err = os.WriteFile(
+		tmp,
 		data,
 		0644,
+	)
+
+	if err != nil {
+
+		return err
+	}
+
+	return os.Rename(
+		tmp,
+		s.path,
 	)
 }

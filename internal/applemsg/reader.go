@@ -1,6 +1,7 @@
 package applemsg
 
 import (
+	"context"
 	"database/sql"
 )
 
@@ -32,10 +33,13 @@ func (r *Reader) LastID() (int64, error) {
 }
 
 func (r *Reader) ReadAfter(
+	ctx context.Context,
 	lastID int64,
 ) ([]RawMessage, error) {
 
-	rows, err := r.db.conn.Query(`
+	rows, err := r.db.conn.QueryContext(
+		ctx,
+		`
 		SELECT
 			m.ROWID,
 			m.guid,
@@ -49,14 +53,14 @@ func (r *Reader) ReadAfter(
 		FROM message m
 
 		LEFT JOIN handle h
-			ON m.handle_id=h.ROWID
+			ON m.handle_id = h.ROWID
 
 		WHERE m.ROWID > ?
 
 		ORDER BY m.ROWID ASC
 
 		LIMIT 100
-	`,
+		`,
 		lastID,
 	)
 
@@ -66,7 +70,11 @@ func (r *Reader) ReadAfter(
 
 	defer rows.Close()
 
-	var result []RawMessage
+	messages := make(
+		[]RawMessage,
+		0,
+		100,
+	)
 
 	for rows.Next() {
 
@@ -96,8 +104,8 @@ func (r *Reader) ReadAfter(
 			return nil, err
 		}
 
-		result = append(
-			result,
+		messages = append(
+			messages,
 			RawMessage{
 
 				ID: id,
@@ -110,9 +118,9 @@ func (r *Reader) ReadAfter(
 
 				Handle: handle,
 
-				Service: service,
-
 				HandleType: detectHandleType(handle),
+
+				Service: service,
 
 				IsFromMe: fromMe == 1,
 
@@ -121,16 +129,42 @@ func (r *Reader) ReadAfter(
 		)
 	}
 
-	return result, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return messages, nil
 }
 
 func detectHandleType(
 	handle string,
 ) string {
 
-	if len(handle) > 0 && handle[0] == '+' {
+	if len(handle) == 0 {
+		return "unknown"
+	}
+
+	if handle[0] == '+' {
 		return "phone"
 	}
 
-	return "email"
+	if containsAt(handle) {
+		return "email"
+	}
+
+	return "unknown"
+}
+
+func containsAt(
+	value string,
+) bool {
+
+	for _, c := range value {
+
+		if c == '@' {
+			return true
+		}
+	}
+
+	return false
 }
